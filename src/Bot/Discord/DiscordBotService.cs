@@ -27,6 +27,8 @@ public sealed class DiscordBotService(
         interactions.Log += OnLog;
         client.Ready += OnReadyAsync;
         client.InteractionCreated += OnInteractionCreatedAsync;
+        client.JoinedGuild += OnJoinedGuildAsync;
+        interactions.InteractionExecuted += OnInteractionExecutedAsync;
 
         await interactions.AddModuleAsync<SubscriptionModule>(services);
 
@@ -39,6 +41,8 @@ public sealed class DiscordBotService(
     {
         client.Ready -= OnReadyAsync;
         client.InteractionCreated -= OnInteractionCreatedAsync;
+        client.JoinedGuild -= OnJoinedGuildAsync;
+        interactions.InteractionExecuted -= OnInteractionExecutedAsync;
         await client.LogoutAsync();
         await client.StopAsync();
         logger.LogInformation("Discord-klient stoppet.");
@@ -48,15 +52,29 @@ public sealed class DiscordBotService(
     {
         try
         {
+            // En specifik test-guild vinder, hvis sat.
             if (_options.TestGuildId is { } guildId)
             {
                 await interactions.RegisterCommandsToGuildAsync(guildId);
-                logger.LogInformation("Slash-kommandoer registreret i test-guild {GuildId}.", guildId);
+                logger.LogInformation("Slash-kommandoer registreret i guild {GuildId}.", guildId);
+                return;
+            }
+
+            // Ellers: registrér instant i alle guilds botten er medlem af.
+            // (Guild-kommandoer er instant; globale kan tage op til ~1 time.)
+            var guilds = client.Guilds;
+            if (guilds.Count > 0)
+            {
+                foreach (var guild in guilds)
+                {
+                    await interactions.RegisterCommandsToGuildAsync(guild.Id);
+                    logger.LogInformation("Slash-kommandoer registreret i {GuildName} ({GuildId}).", guild.Name, guild.Id);
+                }
             }
             else
             {
                 await interactions.RegisterCommandsGloballyAsync();
-                logger.LogInformation("Slash-kommandoer registreret globalt (kan tage op til ~1 time at propagere).");
+                logger.LogInformation("Ingen guilds i cache — registrerede globalt (kan tage op til ~1 time).");
             }
         }
         catch (Exception ex)
@@ -65,16 +83,54 @@ public sealed class DiscordBotService(
         }
     }
 
+    private async Task OnJoinedGuildAsync(SocketGuild guild)
+    {
+        if (_options.TestGuildId is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            await interactions.RegisterCommandsToGuildAsync(guild.Id);
+            logger.LogInformation("Slash-kommandoer registreret i ny guild {GuildName} ({GuildId}).", guild.Name, guild.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Kunne ikke registrere kommandoer i guild {GuildId}.", guild.Id);
+        }
+    }
+
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
-        using var scope = services.CreateScope();
-        var context = new SocketInteractionContext(client, interaction);
-        var result = await interactions.ExecuteCommandAsync(context, scope.ServiceProvider);
+        logger.LogInformation("Interaktion modtaget: {Type} (id {Id}).", interaction.Type, interaction.Id);
+        try
+        {
+            using var scope = services.CreateScope();
+            var context = new SocketInteractionContext(client, interaction);
+            var result = await interactions.ExecuteCommandAsync(context, scope.ServiceProvider);
 
+            if (!result.IsSuccess)
+            {
+                logger.LogWarning("Interaktion fejlede: {Error} — {Reason}", result.Error, result.ErrorReason);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Uventet fejl ved håndtering af interaktion.");
+        }
+    }
+
+    // Med RunMode.Async returneres eksekveringsresultatet her i stedet for fra ExecuteCommandAsync.
+    private Task OnInteractionExecutedAsync(ICommandInfo? command, IInteractionContext context, IResult result)
+    {
         if (!result.IsSuccess)
         {
-            logger.LogWarning("Interaktion fejlede: {Error} — {Reason}", result.Error, result.ErrorReason);
+            logger.LogWarning("Kommando '{Command}' fejlede: {Error} — {Reason}",
+                command?.Name, result.Error, result.ErrorReason);
         }
+
+        return Task.CompletedTask;
     }
 
     private Task OnLog(LogMessage message)

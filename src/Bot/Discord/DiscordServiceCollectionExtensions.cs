@@ -24,7 +24,11 @@ public static class DiscordServiceCollectionExtensions
         services.AddSingleton<DiscordSocketClient>();
         services.AddSingleton(sp => new InteractionService(
             sp.GetRequiredService<DiscordSocketClient>(),
-            new InteractionServiceConfig { LogLevel = LogSeverity.Info }));
+            new InteractionServiceConfig
+            {
+                LogLevel = LogSeverity.Info,
+                DefaultRunMode = RunMode.Sync,
+            }));
 
         services.AddHostedService<DiscordBotService>();
 

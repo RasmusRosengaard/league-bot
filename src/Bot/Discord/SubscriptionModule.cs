@@ -94,6 +94,9 @@ public sealed class SubscriptionModule(
             return;
         }
 
+        // Defer straks: databasekald kan ellers overskride Discords 3-sekunders-frist.
+        await DeferAsync(ephemeral: true);
+
         var channelSubs = await subscriptions.GetByChannelAsync(Context.Channel.Id, CancellationToken.None);
         var match = channelSubs.FirstOrDefault(s =>
             string.Equals(s.GameName, parsedId.GameName, StringComparison.OrdinalIgnoreCase) &&
@@ -101,31 +104,51 @@ public sealed class SubscriptionModule(
 
         if (match is null)
         {
-            await RespondAsync($"Denne kanal abonnerer ikke på **{parsedId}**.", ephemeral: true);
+            await FollowupAsync($"Denne kanal abonnerer ikke på **{parsedId}**.", ephemeral: true);
             return;
         }
 
         await subscriptions.RemoveAsync(match.Puuid, Context.Channel.Id, CancellationToken.None);
-        await RespondAsync($"🗑️ Fjernede abonnementet på **{match.GameName}#{match.TagLine}** i denne kanal.", ephemeral: true);
+        await FollowupAsync($"🗑️ Fjernede abonnementet på **{match.GameName}#{match.TagLine}** i denne kanal.", ephemeral: true);
+    }
+
+    [SlashCommand("ping", "Test at botten svarer.")]
+    public async Task PingAsync()
+    {
+        logger.LogInformation("Ping modtaget — svarer.");
+        await RespondAsync("Pong! 🏓", ephemeral: true);
+        logger.LogInformation("Ping besvaret.");
     }
 
     [SlashCommand("list", "Vis hvilke konti denne kanal abonnerer på.")]
     public async Task ListAsync()
     {
-        var channelSubs = await subscriptions.GetByChannelAsync(Context.Channel.Id, CancellationToken.None);
-        if (channelSubs.Count == 0)
+        logger.LogInformation("List-kommando start (kanal {ChannelId}).", Context.Channel.Id);
+        await DeferAsync(ephemeral: true);
+        try
         {
-            await RespondAsync("Denne kanal abonnerer ikke på nogen konti endnu. Brug `/subscribe`.", ephemeral: true);
-            return;
+            var channelSubs = await subscriptions.GetByChannelAsync(Context.Channel.Id, CancellationToken.None);
+            logger.LogInformation("List: {Count} abonnementer fundet.", channelSubs.Count);
+
+            if (channelSubs.Count == 0)
+            {
+                await FollowupAsync("Denne kanal abonnerer ikke på nogen konti endnu. Brug `/subscribe`.", ephemeral: true);
+                return;
+            }
+
+            var lines = channelSubs.Select(s => $"• **{s.GameName}#{s.TagLine}** (`{s.Region}`)");
+            var embed = new EmbedBuilder()
+                .WithTitle("Abonnementer i denne kanal")
+                .WithDescription(string.Join("\n", lines))
+                .WithColor(Color.Blue)
+                .Build();
+
+            await FollowupAsync(embed: embed, ephemeral: true);
         }
-
-        var lines = channelSubs.Select(s => $"• **{s.GameName}#{s.TagLine}** (`{s.Region}`)");
-        var embed = new EmbedBuilder()
-            .WithTitle("Abonnementer i denne kanal")
-            .WithDescription(string.Join("\n", lines))
-            .WithColor(Color.Blue)
-            .Build();
-
-        await RespondAsync(embed: embed, ephemeral: true);
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "List-kommando fejlede.");
+            await FollowupAsync("Der opstod en fejl ved /list.", ephemeral: true);
+        }
     }
 }
