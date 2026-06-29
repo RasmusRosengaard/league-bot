@@ -1,6 +1,8 @@
 using LolMatchAlert.Bot.Discord;
+using LolMatchAlert.Bot.Polling;
 using LolMatchAlert.Infrastructure.Persistence;
 using LolMatchAlert.Infrastructure.Riot;
+using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -15,6 +17,17 @@ builder.Logging.AddSimpleConsole(options =>
 builder.Services.AddRiotClient(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddDiscordBot(builder.Configuration);
+builder.Services.AddPolling(builder.Configuration);
 
 var host = builder.Build();
-host.Run();
+
+// Kør EF-migrationer ved opstart (kan slås fra med Database:AutoMigrate=false,
+// f.eks. hvis migrationer køres som et separat deploy-trin).
+if (builder.Configuration.GetValue("Database:AutoMigrate", defaultValue: true))
+{
+    using var scope = host.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BotDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+await host.RunAsync();
