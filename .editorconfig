@@ -45,6 +45,12 @@ dotnet_naming_style.underscore_prefix.capitalization = camel_case
 dotnet_diagnostic.CA1848.severity = none   # LoggerMessage delegates — overkill her
 dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait — ikke relevant i worker/bot
 
+# EF Core-genererede migrationer: behandl som genereret kode (ingen analyzer-støj)
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.IDE0161.severity = none
+dotnet_diagnostic.CA1861.severity = none
+
 # Tests: tillad underscores i testnavne (idiomatisk) og andre test-specifikke lempelser
 [tests/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none   # Underscores i testnavne er ønsket
