@@ -1,0 +1,35 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+.vs/
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Test / coverage
+[Tt]est[Rr]esult*/
+coverage/
+*.coverage
+*.cobertura.xml
+TestResults/
+
+## Secrets — må ALDRIG committes
+.env
+.env.*
+!.env.example
+appsettings.*.json
+!appsettings.example.json
+!appsettings.json
+!appsettings.Development.json.example
+secrets.json
+
+## OS
+Thumbs.db
+.DS_Store
