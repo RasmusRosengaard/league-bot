@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lolmatchalert
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lolmatchalert"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Konfiguration via miljøvariabler (__ bliver til : i .NET-konfiguration).
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=lolmatchalert;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}"
+      Riot__ApiKey: ${RIOT_API_KEY:?sæt RIOT_API_KEY i .env}
+      Discord__Token: ${DISCORD_TOKEN:?sæt DISCORD_TOKEN i .env}
+      # Valgfri: instant kommando-registrering i én guild under udvikling.
+      # Discord__TestGuildId: ${DISCORD_TEST_GUILD_ID}
+      DOTNET_ENVIRONMENT: Production
+    restart: unless-stopped
+
+volumes:
+  pgdata:
