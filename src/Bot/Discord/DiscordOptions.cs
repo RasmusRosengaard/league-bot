@@ -12,8 +12,9 @@ public sealed class DiscordOptions
     public string Token { get; set; } = string.Empty;
 
     /// <summary>
-    /// Valgfri test-guild. Hvis sat registreres slash-kommandoer kun i denne guild
-    /// (instant). Ellers registreres globalt (kan tage op til ~1 time at propagere).
+    /// Valgfri test-guild. Hvis sat registreres slash-kommandoer kun i denne guild.
+    /// Ellers registreres de instant i alle guilds botten er medlem af (og når den
+    /// joiner nye); er der ingen guilds i cache, registreres globalt (~1 time at propagere).
     /// </summary>
     public ulong? TestGuildId { get; set; }
 }

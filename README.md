@@ -35,6 +35,11 @@ Slash-kommandoer:
 | `/subscribe riotid:<gameName#tagLine> region:<region>` | Abonnér den aktuelle kanal på en konto |
 | `/unsubscribe riotid:<gameName#tagLine>` | Fjern et abonnement i den aktuelle kanal |
 | `/list` | Vis alle konti den aktuelle kanal abonnerer på |
+| `/ping` | Health check — bekræfter at botten svarer |
+
+Kommandoerne registreres **instant** i de servere botten er medlem af (og når den
+joiner en ny). Sæt `Discord:TestGuildId` for at låse registreringen til én bestemt
+guild; uden nogen guilds i cache registreres globalt (kan tage op til ~1 time).
 
 Baggrundslogik:
 
@@ -160,7 +165,7 @@ Miljøvariabler bruger `__` hvor .NET-konfiguration bruger `:` (f.eks.
 | `Riot:ApiKey` | Riot-API-nøgle | – (påkrævet) |
 | `Riot:MatchIdsPerPoll` | Antal match-ids pr. poll | `5` |
 | `Discord:Token` | Discord bot-token | – (påkrævet) |
-| `Discord:TestGuildId` | Guild til instant kommando-registrering | `null` (globalt) |
+| `Discord:TestGuildId` | Lås kommando-registrering til én guild (ellers alle bottens guilds) | `null` |
 | `Polling:Interval` | Poll-interval (`hh:mm:ss`) | `00:03:00` |
 | `Polling:DataDragonVersion` | Data Dragon-version til ikoner | se `appsettings.json` |
 | `Database:AutoMigrate` | Kør migrationer ved opstart | `true` |
@@ -223,6 +228,36 @@ container-platform (Azure Container Apps, Railway, Fly.io, en VPS …).
 
 Husk: en Riot **development-nøgle udløber hver 24. time** — brug en personal/production-nøgle
 til drift.
+
+---
+
+## Drift & fejlfinding
+
+### Persistens af data
+
+Al state (abonnementer + sidst-sete kampe) ligger i Postgres — bot-containeren er stateless.
+Postgres gemmer i det navngivne volume `pgdata`:
+
+| Handling | Data |
+|---|---|
+| `docker compose stop` / `start` / `restart` | beholdes |
+| `docker compose down` → `up` | beholdes (volumet `pgdata` overlever) |
+| `docker compose down -v` | **slettes** (`-v` fjerner volumet) |
+
+Ved deploy til en sky-platform skal du sikre en tilsvarende persistent database, ellers
+mistes data ved hver redeploy.
+
+### "Applikationen svarede ikke" på en slash-kommando
+
+Discord kræver at en interaktion ack'es inden for **3 sekunder**. Kommandoer der laver
+databasekald kalder derfor `DeferAsync()` med det samme og svarer via `FollowupAsync()`,
+så et lidt tungt første DB-kald ikke rammer fristen. Tilføjer du nye kommandoer med
+I/O, så følg samme mønster. Brug `/ping` til hurtigt at bekræfte at botten svarer.
+
+### Kommandoer dukker ikke op
+
+Guild-kommandoer er instant. Hvis du i stedet kører globalt (ingen guilds / ingen
+`TestGuildId`), kan der gå op til ~1 time før de propagerer.
 
 ---
 
