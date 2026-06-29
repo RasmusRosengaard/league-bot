@@ -1,4 +1,6 @@
-using LolMatchAlert.Bot;
+using LolMatchAlert.Bot.Discord;
+using LolMatchAlert.Infrastructure.Persistence;
+using LolMatchAlert.Infrastructure.Riot;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -9,7 +11,10 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
 });
 
-builder.Services.AddHostedService<HeartbeatService>();
+// Riot-klient (resilience), persistering (Postgres + repositories), Discord-bot.
+builder.Services.AddRiotClient(builder.Configuration);
+builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddDiscordBot(builder.Configuration);
 
 var host = builder.Build();
 host.Run();
