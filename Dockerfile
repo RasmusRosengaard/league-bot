@@ -21,6 +21,12 @@ RUN dotnet publish src/Bot/LolMatchAlert.Bot.csproj -c Release -o /app --no-rest
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 
+# libgssapi-krb5-2: Npgsql forsøger at loade GSSAPI/Kerberos ved opstart. Uden den
+# logges en (harmløs, men støjende) fejl ved første DB-kald.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Kør som non-root.
 RUN useradd --uid 1001 --create-home --shell /usr/sbin/nologin appuser
 COPY --from=build /app ./
