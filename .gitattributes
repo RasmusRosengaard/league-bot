@@ -1,0 +1,7 @@
+# Normalisér linjeskift: tekstfiler gemmes med LF i repoet.
+* text=auto eol=lf
+
+# Binære filer røres ikke.
+*.png binary
+*.jpg binary
+*.ico binary

@@ -44,3 +44,9 @@ dotnet_naming_style.underscore_prefix.capitalization = camel_case
 # CA-analyzer justeringer der ellers støjer i et lille projekt
 dotnet_diagnostic.CA1848.severity = none   # LoggerMessage delegates — overkill her
 dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait — ikke relevant i worker/bot
+
+# Tests: tillad underscores i testnavne (idiomatisk) og andre test-specifikke lempelser
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none   # Underscores i testnavne er ønsket
+dotnet_diagnostic.CA1515.severity = none   # public test-typer er fint
+dotnet_diagnostic.CA1861.severity = none
