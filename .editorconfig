@@ -43,6 +43,7 @@ dotnet_naming_style.underscore_prefix.capitalization = camel_case
 
 # CA-analyzer justeringer der ellers støjer i et lille projekt
 dotnet_diagnostic.CA1848.severity = none   # LoggerMessage delegates — overkill her
+dotnet_diagnostic.CA1873.severity = none   # "dyre" log-argumenter — samme familie, overkill her
 dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait — ikke relevant i worker/bot
 
 # EF Core-genererede migrationer: behandl som genereret kode (ingen analyzer-støj)
