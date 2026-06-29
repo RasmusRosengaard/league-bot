@@ -13,24 +13,40 @@ namespace LolMatchAlert.Tests.Persistence;
 /// </summary>
 public sealed class PersistenceIntegrationTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
-        .Build();
+    // I CI bruges en Postgres-service-container via TEST_POSTGRES_CONNECTION;
+    // lokalt startes en container via Testcontainers (kræver Docker).
+    private static readonly string? CiConnectionString =
+        Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION");
+
+    private readonly PostgreSqlContainer? _postgres =
+        CiConnectionString is null ? new PostgreSqlBuilder("postgres:16-alpine").Build() : null;
+
+    private string ConnectionString => CiConnectionString ?? _postgres!.GetConnectionString();
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        if (_postgres is not null)
+        {
+            await _postgres.StartAsync();
+        }
 
         // Kør migrationer (ikke EnsureCreated) — samme vej som produktion.
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
     }
 
-    public async Task DisposeAsync() => await _postgres.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        if (_postgres is not null)
+        {
+            await _postgres.DisposeAsync();
+        }
+    }
 
     private BotDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<BotDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
+            .UseNpgsql(ConnectionString)
             .Options;
         return new BotDbContext(options);
     }

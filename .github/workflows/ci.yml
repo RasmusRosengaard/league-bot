@@ -1,0 +1,143 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Forventede GitHub secrets (kræves IKKE til build/test — kun til en rigtig deploy):
+#   RIOT_API_KEY    – Riot personal/production-nøgle
+#   DISCORD_TOKEN   – Discord bot-token
+# Push til ghcr.io bruger den indbyggede GITHUB_TOKEN (ingen ekstra secret nødvendig).
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+
+jobs:
+  build-test:
+    name: Build, test & coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lolmatchalert
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Opsæt .NET (fra global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore (pakker + lokale tools)
+        run: |
+          dotnet restore
+          dotnet tool restore
+
+      - name: Build (warnings-as-errors)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Kør EF-migrationer mod databasen (separat trin)
+        env:
+          ConnectionStrings__Default: "Host=localhost;Port=5432;Database=lolmatchalert;Username=postgres;Password=postgres"
+        run: >-
+          dotnet ef database update
+          --project src/Infrastructure/LolMatchAlert.Infrastructure.csproj
+          --startup-project src/Infrastructure/LolMatchAlert.Infrastructure.csproj
+
+      - name: Test med coverage
+        env:
+          # Får Postgres-integrationstesten til at bruge service-containeren
+          # i stedet for at starte en Testcontainers-container.
+          TEST_POSTGRES_CONNECTION: "Host=localhost;Port=5432;Database=lolmatchalert;Username=postgres;Password=postgres"
+        run: >-
+          dotnet test --no-build --configuration Release
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+
+      - name: Generér coverage-rapport
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: coverage/**/coverage.cobertura.xml
+          targetdir: coverage/report
+          reporttypes: HtmlInline;Cobertura;MarkdownSummaryGithub
+
+      - name: Vis coverage-procent i job-summary
+        run: cat coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage som artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/report
+
+  docker:
+    name: Docker build & push (ghcr)
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log ind på GitHub Container Registry (kun main)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build (og push kun på main, ikke på pull requests)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------------------------
+  # Valgfrit deploy-trin (kun main). Bevidst gated så det ikke kører af sig selv.
+  # Tænd ved at sætte repository-variablen ENABLE_DEPLOY = 'true' og udfylde
+  # trinnet med f.eks. Azure Container Apps / Railway / en VPS.
+  # ----------------------------------------------------------------------------
+  deploy:
+    name: Deploy (placeholder)
+    needs: docker
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hvor deploy ville ske
+        run: |
+          echo "Image: ghcr.io/${{ github.repository }}:latest"
+          echo "Her ville deploy til container-platformen ske."
+          echo "F.eks.: az containerapp update / railway up / ssh + docker compose pull && up -d"
